@@ -66,13 +66,13 @@ function getMonthLabel(key){ const [y,m] = key.split("-"); return new Date(+y,+m
 
 const MARKET_COLOR = { NQ:"#00d4ff", XAU:"#f5c842", XAG:"#c0c0c0", BTC:"#f7931a" };
 
-async function storageSave(key, value) {
-  try { await window.storage.set(key, JSON.stringify(value)); } catch(e) { console.warn("storage.set failed", e); }
+function storageSave(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch(e) { console.warn("save failed", e); }
 }
-async function storageLoad(key, fallback) {
+function storageLoad(key, fallback) {
   try {
-    const res = await window.storage.get(key);
-    return res ? JSON.parse(res.value) : fallback;
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
   } catch(e) { return fallback; }
 }
 
@@ -91,17 +91,14 @@ export default function TradeJournal() {
 
   // Load persisted data on mount
   useEffect(() => {
-    async function init() {
-      const savedTrades = await storageLoad(STORAGE_KEY, []);
-      const savedNotes  = await storageLoad(NOTES_KEY,   {});
-      const savedIds    = new Set(savedTrades.map(function(t){ return t.id; }));
-      const merged      = HISTORICAL.filter(function(h){ return !savedIds.has(h.id); }).concat(savedTrades);
-      merged.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
-      setTrades(merged);
-      setDayNotes(savedNotes);
-      setLoaded(true);
-    }
-    init();
+    const savedTrades = storageLoad(STORAGE_KEY, []);
+    const savedNotes  = storageLoad(NOTES_KEY,   {});
+    const savedIds    = new Set(savedTrades.map(function(t){ return t.id; }));
+    const merged      = HISTORICAL.filter(function(h){ return !savedIds.has(h.id); }).concat(savedTrades);
+    merged.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
+    setTrades(merged);
+    setDayNotes(savedNotes);
+    setLoaded(true);
   }, []);
 
   // Persist trades whenever they change (after initial load)
@@ -1233,4 +1230,3 @@ export default function TradeJournal() {
     </>
   );
 }
-
