@@ -83,7 +83,7 @@ export default function TradeJournal() {
   const [view,      setView]      = useState("calendar");
   const [logMode,   setLogMode]   = useState("now");
   const [step,      setStep]      = useState(1);
-  const [form,      setForm]      = useState({ market:null, direction:null, confluences:[], units:"", pnl:"", result:null, beOutcome:null, pastDate:"", pastTime:"" });
+  const [form,      setForm]      = useState({ market:null, direction:null, confluences:[], units:"", pnl:"", result:null, beOutcome:null, pastDate:"", pastTime:"", entryPrice:"", exitPrice:"", tpType:"full", partialPnl:"", partialPoints:"", fullPoints:"" });
   const [saved,     setSaved]     = useState(false);
   const [calMonth,  setCalMonth]  = useState(() => getMonthKey(new Date()));
   const [selectedDay, setSelectedDay] = useState(null);
@@ -159,7 +159,7 @@ export default function TradeJournal() {
     setEditModal(null);
   };
 
-  const resetForm = () => { setForm({ market:null, direction:null, confluences:[], units:"", pnl:"", result:null, beOutcome:null, pastDate:"", pastTime:"" }); setStep(1); setSaved(false); setLogMode("now"); };
+  const resetForm = () => { setForm({ market:null, direction:null, confluences:[], units:"", pnl:"", result:null, beOutcome:null, pastDate:"", pastTime:"", entryPrice:"", exitPrice:"", tpType:"full", partialPnl:"", partialPoints:"", fullPoints:"" }); setStep(1); setSaved(false); setLogMode("now"); };
   const toggleConf = (id) => setForm(f => ({ ...f, confluences: f.confluences.includes(id) ? f.confluences.filter(c=>c!==id) : [...f.confluences, id] }));
 
   const submitTrade = () => {
@@ -176,6 +176,9 @@ export default function TradeJournal() {
       const now = new Date();
       tradeDate = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0") + "-" + String(now.getDate()).padStart(2,"0") + "T" + String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0") + ":00";
     }
+    const entryP = parseFloat(form.entryPrice) || null;
+    const exitP  = parseFloat(form.exitPrice)  || null;
+    const pointsGained = (entryP && exitP) ? Math.abs(exitP - entryP) : null;
     const trade = {
       id: Date.now().toString(),
       date: tradeDate,
@@ -184,6 +187,13 @@ export default function TradeJournal() {
       grade: gradeResult.grade, gradeLabel: gradeResult.label, score: gradeResult.score,
       units: parseFloat(form.units), leverage, pnl: pnlNum, result: form.result,
       beOutcome: form.result === "BE" ? form.beOutcome : null,
+      entryPrice: entryP,
+      exitPrice: exitP,
+      pointsGained: pointsGained,
+      tpType: form.result === "W" ? form.tpType : null,
+      partialPnl: form.result === "W" && form.tpType === "partial" ? parseFloat(form.partialPnl) || null : null,
+      partialPoints: form.result === "W" && form.tpType === "partial" ? parseFloat(form.partialPoints) || null : null,
+      fullPoints: form.result === "W" && form.tpType === "full" ? pointsGained : (form.result === "W" && form.tpType === "partial" ? parseFloat(form.fullPoints) || null : null),
     };
     setTrades(prev => [trade, ...prev].sort((a,b) => new Date(b.date)-new Date(a.date)));
     setSaved(true);
@@ -630,7 +640,7 @@ export default function TradeJournal() {
               <>
                 <div className="log-header">
                   <div className="log-title">LOG TRADE{logMode==="past" && <span className="past-badge">PAST</span>}</div>
-                  <div className="log-sub">{logMode==="past" ? `Step ${step} of 7` : `Step ${step} of 6`} — tap to select</div>
+                  <div className="log-sub">{logMode==="past" ? `Step ${step} of 8` : `Step ${step} of 7`} — tap to select</div>
                 </div>
 
                 {/* Mode toggle */}
@@ -640,7 +650,7 @@ export default function TradeJournal() {
                 </div>
 
                 <div className="steps">
-                  {(logMode==="past"?[0,1,2,3,4,5,6]:[1,2,3,4,5,6]).map(s=><div key={s} className={`sdot ${s<step?"done":s===step?"active":""}`}/>)}
+                  {(logMode==="past"?[0,1,2,3,4,5,6,7]:[1,2,3,4,5,6,7]).map(s=><div key={s} className={`sdot ${s<step?"done":s===step?"active":""}`}/>)}
                 </div>
 
                 {/* Step 0 — Past Date (only in past mode) */}
@@ -718,12 +728,25 @@ export default function TradeJournal() {
                 {/* Step 4 — Numbers */}
                 {step===4 && (
                   <div className="sec">
-                    <div className="sec-lbl">Position Size</div>
+                    <div className="sec-lbl">Position Details</div>
                     <div className="igrp">
                       <div className="irow">
                         <div className="ilbl">Units / Lots</div>
                         <input className="ninp" type="number" inputMode="decimal" placeholder="0.00" value={form.units} onChange={e=>setForm(f=>({...f,units:e.target.value}))} />
                       </div>
+                      <div className="irow">
+                        <div className="ilbl">Entry Price</div>
+                        <input className="ninp" type="number" inputMode="decimal" placeholder="e.g. 21450.25" value={form.entryPrice} onChange={e=>setForm(f=>({...f,entryPrice:e.target.value}))} />
+                      </div>
+                      <div className="irow">
+                        <div className="ilbl">Exit Price</div>
+                        <input className="ninp" type="number" inputMode="decimal" placeholder="e.g. 21550.00" value={form.exitPrice} onChange={e=>setForm(f=>({...f,exitPrice:e.target.value}))} />
+                      </div>
+                      {form.entryPrice && form.exitPrice && (
+                        <div style={{padding:"8px 12px",background:"#06060c",borderRadius:8,fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#778899"}}>
+                          Points: <span style={{color:"#dde0f0",fontWeight:600}}>{Math.abs(parseFloat(form.exitPrice)-parseFloat(form.entryPrice)).toFixed(2)} pts</span>
+                        </div>
+                      )}
                       <div className="irow">
                         <div className="ilbl">P&L Amount ($)</div>
                         <input className="ninp" type="number" inputMode="decimal" placeholder="0" value={form.pnl} onChange={e=>setForm(f=>({...f,pnl:e.target.value}))} />
@@ -754,8 +777,43 @@ export default function TradeJournal() {
                   </div>
                 )}
 
-                {/* Step 6 — BE Outcome + Save */}
+                {/* Step 6 — TP Type (wins only) */}
                 {step===6 && (
+                  <div className="sec">
+                    {form.result === "W" ? (
+                      <>
+                        <div className="sec-lbl">Take Profit Type</div>
+                        <div className="dir-grid">
+                          <button className={`dir-btn long ${form.tpType==="full"?"on":""}`} style={{fontSize:13}} onClick={()=>setForm(f=>({...f,tpType:"full"}))}>🎯 Full TP</button>
+                          <button className={`dir-btn short ${form.tpType==="partial"?"on":""}`} style={{fontSize:13,borderColor:form.tpType==="partial"?"#f59e0b":"",color:form.tpType==="partial"?"#f59e0b":""}} onClick={()=>setForm(f=>({...f,tpType:"partial"}))}>⚡ Partial TP</button>
+                        </div>
+                        {form.tpType === "partial" && (
+                          <div className="igrp" style={{marginTop:10}}>
+                            <div className="irow">
+                              <div className="ilbl">Partial P&L ($)</div>
+                              <input className="ninp" type="number" inputMode="decimal" placeholder="e.g. 800" value={form.partialPnl} onChange={e=>setForm(f=>({...f,partialPnl:e.target.value}))} />
+                            </div>
+                            <div className="irow">
+                              <div className="ilbl">Points to Partial TP</div>
+                              <input className="ninp" type="number" inputMode="decimal" placeholder="e.g. 25.5" value={form.partialPoints} onChange={e=>setForm(f=>({...f,partialPoints:e.target.value}))} />
+                            </div>
+                            <div className="irow">
+                              <div className="ilbl">Points to Full TP</div>
+                              <input className="ninp" type="number" inputMode="decimal" placeholder="e.g. 50.0" value={form.fullPoints} onChange={e=>setForm(f=>({...f,fullPoints:e.target.value}))} />
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div style={{color:"#778899",fontFamily:"'JetBrains Mono',monospace",fontSize:12,textAlign:"center",padding:"20px 0"}}>TP tracking only applies to wins. Continue to save.</div>
+                    )}
+                    <button className="next-btn" onClick={()=>setStep(7)} style={{marginTop:14}}>NEXT →</button>
+                    <button className="back-btn" onClick={()=>setStep(5)}>← Back</button>
+                  </div>
+                )}
+
+                {/* Step 7 — BE Outcome + Save */}
+                {step===7 && (
                   <div className="sec">
                     {form.result==="BE" && (
                       <>
@@ -774,7 +832,7 @@ export default function TradeJournal() {
                       </>
                     )}
                     <button className="next-btn" onClick={submitTrade} style={{marginTop:14}}>SAVE TRADE ✓</button>
-                    <button className="back-btn" onClick={()=>setStep(5)}>← Back</button>
+                    <button className="back-btn" onClick={()=>setStep(6)}>← Back</button>
                   </div>
                 )}
               </>
@@ -785,183 +843,281 @@ export default function TradeJournal() {
         {/* ── STATS VIEW ── */}
         {view==="stats" && (
           <div className="stats-wrap">
-            <div className="stats-title">STATS</div>
+            <div className="stats-title">PERFORMANCE REPORT</div>
 
             {trades.length === 0 ? (
               <div style={{textAlign:"center",padding:"40px 20px",color:"#778899",fontFamily:"'JetBrains Mono',monospace",fontSize:12}}>No trades logged yet.</div>
             ) : (() => {
-              // ── computed values ──────────────────────────────────────
-              const wins  = trades.filter(t => t.result === "W");
-              const losses = trades.filter(t => t.result === "L");
-              const bes   = trades.filter(t => t.result === "BE");
-              const wr    = (wins.length + losses.length) > 0 ? Math.round(wins.length / (wins.length + losses.length) * 100) : 0;
-              const tPnl  = trades.reduce((s,t) => s + t.pnl, 0);
-              const avgWin  = wins.length  > 0 ? wins.reduce((s,t)=>s+t.pnl,0)  / wins.length  : 0;
-              const avgLoss = losses.length > 0 ? Math.abs(losses.reduce((s,t)=>s+t.pnl,0) / losses.length) : 0;
-              const rr = avgLoss > 0 ? (avgWin / avgLoss).toFixed(2) : "—";
-              const grossWin  = wins.reduce((s,t)=>s+t.pnl,0);
-              const grossLoss = Math.abs(losses.reduce((s,t)=>s+t.pnl,0));
-              const pf = grossLoss > 0 ? (grossWin / grossLoss).toFixed(2) : "—";
-              const best  = trades.reduce((b,t) => t.pnl > b.pnl ? t : b, trades[0]);
-              const worst = trades.reduce((w,t) => t.pnl < w.pnl ? t : w, trades[0]);
-              const avgScore = Math.round(trades.reduce((s,t)=>s+(t.score||0),0) / trades.length);
+              const sorted   = trades.slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
+              const wins     = trades.filter(t=>t.result==="W");
+              const losses   = trades.filter(t=>t.result==="L");
+              const bes      = trades.filter(t=>t.result==="BE");
+              const wr       = (wins.length+losses.length)>0 ? Math.round(wins.length/(wins.length+losses.length)*100) : 0;
+              const tPnl     = trades.reduce((s,t)=>s+t.pnl,0);
+              const avgWin   = wins.length>0   ? wins.reduce((s,t)=>s+t.pnl,0)/wins.length   : 0;
+              const avgLoss  = losses.length>0 ? Math.abs(losses.reduce((s,t)=>s+t.pnl,0)/losses.length) : 0;
+              const rr       = avgLoss>0 ? (avgWin/avgLoss).toFixed(2) : "—";
+              const grossWin = wins.reduce((s,t)=>s+t.pnl,0);
+              const grossLoss= Math.abs(losses.reduce((s,t)=>s+t.pnl,0));
+              const pf       = grossLoss>0 ? (grossWin/grossLoss).toFixed(2) : "—";
+              const best     = trades.reduce((b,t)=>t.pnl>b.pnl?t:b, trades[0]);
+              const worst    = trades.reduce((w,t)=>t.pnl<w.pnl?t:w, trades[0]);
+              const avgScore = Math.round(trades.reduce((s,t)=>s+(t.score||0),0)/trades.length);
 
-              // streak
-              let curStreak = 0, streakType = "";
-              for (let i = 0; i < trades.length; i++) {
-                const r = trades[i].result;
-                if (i === 0) { streakType = r; curStreak = r !== "BE" ? 1 : 0; continue; }
-                if (r === streakType && r !== "BE") curStreak++;
-                else break;
-              }
+              // Equity curve & drawdown
+              let equity = 0, peak = 0, maxDD = 0;
+              const equityCurve = sorted.map(t => { equity+=t.pnl; if(equity>peak) peak=equity; const dd=peak>0?(peak-equity)/peak*100:0; if(dd>maxDD) maxDD=dd; return {pnl:t.pnl, eq:equity, dd}; });
+              const eqMin = Math.min(0,...equityCurve.map(p=>p.eq));
+              const eqMax = Math.max(0,...equityCurve.map(p=>p.eq));
+              const eqRange = eqMax-eqMin||1;
+              const W=340, H=90, PAD=8;
+              const eqX = i => PAD + (i/(equityCurve.length-1||1))*(W-PAD*2);
+              const eqY = v => H - PAD - ((v-eqMin)/eqRange)*(H-PAD*2);
+              const eqPath = equityCurve.map((p,i)=>(i===0?"M":"L")+eqX(i).toFixed(1)+","+eqY(p.eq).toFixed(1)).join(" ");
+              const eqFill = eqPath+" L"+eqX(equityCurve.length-1).toFixed(1)+","+eqY(0).toFixed(1)+" L"+eqX(0).toFixed(1)+","+eqY(0).toFixed(1)+" Z";
+              // Drawdown area
+              const ddMax = Math.max(...equityCurve.map(p=>p.dd),1);
+              const ddY = v => PAD + (v/ddMax)*(H-PAD*2);
+              const ddPath = equityCurve.map((p,i)=>(i===0?"M":"L")+eqX(i).toFixed(1)+","+ddY(p.dd).toFixed(1)).join(" ");
+              const ddFill = ddPath+" L"+eqX(equityCurve.length-1).toFixed(1)+","+ddY(0).toFixed(1)+" L"+eqX(0).toFixed(1)+","+ddY(0).toFixed(1)+" Z";
 
-              // last 10
-              const last10 = trades.slice(0, 10);
-              const l10pnl = last10.reduce((s,t)=>s+t.pnl,0);
-              const l10w   = last10.filter(t=>t.result==="W").length;
-              const l10wr  = (l10w + last10.filter(t=>t.result==="L").length) > 0
-                ? Math.round(l10w / (l10w + last10.filter(t=>t.result==="L").length) * 100) : 0;
+              // Sharpe ratio (annualized, assume 0 risk-free rate)
+              const returns = sorted.map(t=>t.pnl);
+              const meanR   = returns.reduce((a,b)=>a+b,0)/returns.length;
+              const varR    = returns.reduce((a,b)=>a+(b-meanR)*(b-meanR),0)/returns.length;
+              const stdR    = Math.sqrt(varR);
+              const sharpe  = stdR>0 ? ((meanR/stdR)*Math.sqrt(252)).toFixed(2) : "—";
 
-              // weekly stats — group by ISO week
-              const getWeekKey = (dateStr) => {
-                const d = new Date(dateStr);
-                const day = d.getDay(); // 0=Sun
-                const diff = day === 0 ? -6 : 1 - day; // shift to Monday
-                const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
-                return mon.getFullYear() + "-" + String(mon.getMonth()+1).padStart(2,"0") + "-" + String(mon.getDate()).padStart(2,"0");
-              };
-              const weekMap = {};
-              trades.forEach(t => {
-                const wk = getWeekKey(t.date);
-                if (!weekMap[wk]) weekMap[wk] = [];
-                weekMap[wk].push(t);
-              });
-              const weeks = Object.keys(weekMap).sort().reverse().slice(0, 8);
+              // Annualized
+              const sortedDates = sorted.map(t=>new Date(t.date));
+              const spanDays = sortedDates.length>1 ? Math.max(1,(sortedDates[sortedDates.length-1]-sortedDates[0])/86400000) : 1;
+              const annualized = Math.round((tPnl/spanDays)*365);
 
-              // daily avg & best trading day of week
-              const dowMap = {0:[], 1:[], 2:[], 3:[], 4:[], 5:[], 6:[]};
-              trades.forEach(t => { dowMap[new Date(t.date).getDay()].push(t.pnl); });
-              const dowLabels = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-              const bestDow = Object.entries(dowMap)
-                .filter(([,v]) => v.length > 0)
-                .map(([k,v]) => ({ day: parseInt(k), avg: v.reduce((a,b)=>a+b,0)/v.length, count: v.length }))
-                .sort((a,b) => b.avg - a.avg)[0];
+              // Calmar ratio = annualized return / max drawdown %
+              const calmar = maxDD>0 ? (annualized/(maxDD/100*Math.max(peak,1))).toFixed(2) : "—";
 
-              // long vs short
-              const longs  = trades.filter(t => t.direction === "LONG");
-              const shorts = trades.filter(t => t.direction === "SHORT");
-              const lPnl = longs.reduce((s,t)=>s+t.pnl,0);
-              const sPnl = shorts.reduce((s,t)=>s+t.pnl,0);
-              const lWR  = longs.filter(t=>t.result==="W").length;
-              const lLR  = longs.filter(t=>t.result==="L").length;
-              const sWR  = shorts.filter(t=>t.result==="W").length;
-              const sLR  = shorts.filter(t=>t.result==="L").length;
-              const longWR  = (lWR+lLR)>0 ? Math.round(lWR/(lWR+lLR)*100) : 0;
-              const shortWR = (sWR+sLR)>0 ? Math.round(sWR/(sWR+sLR)*100) : 0;
+              // Streak
+              let curStreak=0, streakType="";
+              for(let i=0;i<trades.length;i++){const r=trades[i].result;if(i===0){streakType=r;curStreak=r!=="BE"?1:0;continue;}if(r===streakType&&r!=="BE")curStreak++;else break;}
+              let maxWStreak=0,maxLStreak=0,tmp=0,tmpT="";
+              sorted.forEach(t=>{if(t.result===tmpT&&t.result!=="BE"){tmp++;}else{tmpT=t.result;tmp=1;}if(tmpT==="W"&&tmp>maxWStreak)maxWStreak=tmp;if(tmpT==="L"&&tmp>maxLStreak)maxLStreak=tmp;});
 
-              // grade dist
-              const gradeDist = {Aplus:0, A:0, Bplus:0, B:0, C:0};
-              trades.forEach(t => { if (gradeDist[t.grade] !== undefined) gradeDist[t.grade]++; });
-              const gradeColors = { Aplus:"#22c55e", A:"#86efac", Bplus:"#f59e0b", B:"#fb923c", C:"#ef4444" };
-              const gradeLabels = { Aplus:"A+", A:"A", Bplus:"B+", B:"B", C:"C" };
+              // Last 10
+              const last10  = trades.slice(0,10);
+              const l10pnl  = last10.reduce((s,t)=>s+t.pnl,0);
+              const l10w    = last10.filter(t=>t.result==="W").length;
+              const l10l    = last10.filter(t=>t.result==="L").length;
+              const l10wr   = (l10w+l10l)>0 ? Math.round(l10w/(l10w+l10l)*100) : 0;
 
-              // annualized (simple: daily avg * 252 trading days)
-              const sortedDates = trades.map(t=>new Date(t.date)).sort((a,b)=>a-b);
-              const spanDays = sortedDates.length > 1
-                ? Math.max(1, (sortedDates[sortedDates.length-1] - sortedDates[0]) / 86400000)
-                : 1;
-              const dailyAvg = tPnl / spanDays;
-              const annualized = Math.round(dailyAvg * 365);
+              // Week map
+              const getWeekKey = (dateStr) => { const d=new Date(dateStr); const day=d.getDay(); const diff=day===0?-6:1-day; const mon=new Date(d.getFullYear(),d.getMonth(),d.getDate()+diff); return mon.getFullYear()+"-"+String(mon.getMonth()+1).padStart(2,"0")+"-"+String(mon.getDate()).padStart(2,"0"); };
+              const weekMap={};
+              trades.forEach(t=>{const wk=getWeekKey(t.date);if(!weekMap[wk])weekMap[wk]=[];weekMap[wk].push(t);});
+              const weeks=Object.keys(weekMap).sort().reverse().slice(0,8);
+
+              // DOW
+              const dowMap={0:[],1:[],2:[],3:[],4:[],5:[],6:[]};
+              trades.forEach(t=>{ dowMap[new Date(t.date).getDay()].push(t.pnl); });
+              const dowLabels=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+              const bestDow=Object.entries(dowMap).filter(([,v])=>v.length>0).map(([k,v])=>({day:parseInt(k),avg:v.reduce((a,b)=>a+b,0)/v.length,count:v.length})).sort((a,b)=>b.avg-a.avg)[0];
+
+              // Long vs Short
+              const longs=trades.filter(t=>t.direction==="LONG"); const shorts=trades.filter(t=>t.direction==="SHORT");
+              const lPnl=longs.reduce((s,t)=>s+t.pnl,0); const sPnl=shorts.reduce((s,t)=>s+t.pnl,0);
+              const longWR=(longs.filter(t=>t.result==="W").length+longs.filter(t=>t.result==="L").length)>0?Math.round(longs.filter(t=>t.result==="W").length/(longs.filter(t=>t.result==="W").length+longs.filter(t=>t.result==="L").length)*100):0;
+              const shortWR=(shorts.filter(t=>t.result==="W").length+shorts.filter(t=>t.result==="L").length)>0?Math.round(shorts.filter(t=>t.result==="W").length/(shorts.filter(t=>t.result==="W").length+shorts.filter(t=>t.result==="L").length)*100):0;
+
+              // Grade dist
+              const gradeDist={Aplus:0,A:0,Bplus:0,B:0,C:0};
+              trades.forEach(t=>{if(gradeDist[t.grade]!==undefined)gradeDist[t.grade]++;});
+              const gradeColors={Aplus:"#22c55e",A:"#86efac",Bplus:"#f59e0b",B:"#fb923c",C:"#ef4444"};
+              const gradeLabels={Aplus:"A+",A:"A",Bplus:"B+",B:"B",C:"C"};
+
+              // Confluence WR
+              const confStats = CONFLUENCES.map(c => {
+                const withConf   = trades.filter(t=>t.confluences&&t.confluences.includes(c.id));
+                const withoutConf= trades.filter(t=>!t.confluences||!t.confluences.includes(c.id));
+                const wW=withConf.filter(t=>t.result==="W").length, wL=withConf.filter(t=>t.result==="L").length;
+                const woW=withoutConf.filter(t=>t.result==="W").length, woL=withoutConf.filter(t=>t.result==="L").length;
+                const wr=(wW+wL)>0?Math.round(wW/(wW+wL)*100):null;
+                const woWR=(woW+woL)>0?Math.round(woW/(woW+woL)*100):null;
+                const avgPnl=withConf.length>0?withConf.reduce((s,t)=>s+t.pnl,0)/withConf.length:null;
+                return {c, count:withConf.length, wr, woWR, avgPnl};
+              }).filter(x=>x.count>0).sort((a,b)=>(b.wr||0)-(a.wr||0));
+
+              // Partial TP stats
+              const partialTrades = trades.filter(t=>t.tpType==="partial"&&t.result==="W");
+              const fullTPTrades  = trades.filter(t=>t.tpType==="full"&&t.result==="W");
+              const partialToFull = partialTrades.filter(t=>t.fullPoints&&t.partialPoints&&t.fullPoints>0);
+              const partialToFullRate = partialTrades.length>0?Math.round(partialToFull.length/partialTrades.length*100):null;
+              const avgPartialPts = partialTrades.filter(t=>t.partialPoints).length>0 ? (partialTrades.filter(t=>t.partialPoints).reduce((s,t)=>s+t.partialPoints,0)/partialTrades.filter(t=>t.partialPoints).length).toFixed(1) : null;
+              const avgFullPts    = fullTPTrades.filter(t=>t.pointsGained).length>0 ? (fullTPTrades.filter(t=>t.pointsGained).reduce((s,t)=>s+t.pointsGained,0)/fullTPTrades.filter(t=>t.pointsGained).length).toFixed(1) : null;
+              const avgPartialPnl = partialTrades.length>0?(partialTrades.reduce((s,t)=>s+t.pnl,0)/partialTrades.length).toFixed(0):null;
+              const avgFullPnl    = fullTPTrades.length>0?(fullTPTrades.reduce((s,t)=>s+t.pnl,0)/fullTPTrades.length).toFixed(0):null;
+
+              // Expectancy
+              const expectancy = ((wr/100)*avgWin - ((100-wr)/100)*avgLoss).toFixed(0);
+              // Kelly criterion
+              const kellyCrit = avgLoss>0 ? Math.max(0,((wr/100) - ((1-wr/100)/(avgWin/avgLoss)))*100).toFixed(1) : "—";
 
               return (
                 <>
-                  {/* Row 1 — P&L + WR */}
+                  {/* ── EQUITY CURVE ── */}
+                  <div className="stat-section" style={{padding:"14px 16px"}}>
+                    <div className="stat-section-hdr" style={{marginBottom:8}}><span>EQUITY CURVE</span><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:600,color:tPnl>=0?"#22c55e":"#ef4444"}}>{fmt(tPnl)}</span></div>
+                    {equityCurve.length < 2 ? (
+                      <div style={{color:"#778899",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textAlign:"center",padding:"16px 0"}}>Log more trades to see chart</div>
+                    ) : (
+                      <svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",height:"auto",display:"block",overflow:"visible"}}>
+                        <defs>
+                          <linearGradient id="eqGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={tPnl>=0?"#22c55e":"#ef4444"} stopOpacity="0.25"/>
+                            <stop offset="100%" stopColor={tPnl>=0?"#22c55e":"#ef4444"} stopOpacity="0"/>
+                          </linearGradient>
+                        </defs>
+                        <line x1={PAD} y1={eqY(0).toFixed(1)} x2={W-PAD} y2={eqY(0).toFixed(1)} stroke="#1a1a2e" strokeWidth="1"/>
+                        <path d={eqFill} fill="url(#eqGrad)"/>
+                        <path d={eqPath} fill="none" stroke={tPnl>=0?"#22c55e":"#ef4444"} strokeWidth="2" strokeLinejoin="round"/>
+                        {equityCurve.map((p,i)=>p.pnl===best.pnl?<circle key={i} cx={eqX(i).toFixed(1)} cy={eqY(p.eq).toFixed(1)} r="3" fill="#22c55e"/>:p.pnl===worst.pnl?<circle key={i} cx={eqX(i).toFixed(1)} cy={eqY(p.eq).toFixed(1)} r="3" fill="#ef4444"/>:null)}
+                      </svg>
+                    )}
+                    <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+                      <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:8,color:"#778899"}}>{sorted.length>0?new Date(sorted[0].date).toLocaleDateString("en-US",{month:"short",day:"numeric"}):""}</span>
+                      <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:8,color:"#778899"}}>{sorted.length>0?new Date(sorted[sorted.length-1].date).toLocaleDateString("en-US",{month:"short",day:"numeric"}):""}</span>
+                    </div>
+                  </div>
+
+                  {/* ── DRAWDOWN CHART ── */}
+                  <div className="stat-section" style={{padding:"14px 16px"}}>
+                    <div className="stat-section-hdr" style={{marginBottom:8}}><span>DRAWDOWN</span><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:600,color:"#ef4444"}}>Max -{maxDD.toFixed(1)}%</span></div>
+                    {equityCurve.length < 2 ? null : (
+                      <svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",height:"auto",display:"block"}}>
+                        <defs>
+                          <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#ef4444" stopOpacity="0"/>
+                            <stop offset="100%" stopColor="#ef4444" stopOpacity="0.3"/>
+                          </linearGradient>
+                        </defs>
+                        <path d={ddFill} fill="url(#ddGrad)"/>
+                        <path d={ddPath} fill="none" stroke="#ef4444" strokeWidth="1.5" strokeLinejoin="round"/>
+                        <line x1={PAD} y1={PAD} x2={W-PAD} y2={PAD} stroke="#1a1a2e" strokeWidth="1" strokeDasharray="4,3"/>
+                        <text x={PAD+2} y={PAD-1} fill="#ef4444" fontSize="7" fontFamily="'JetBrains Mono',monospace">-{ddMax.toFixed(1)}%</text>
+                      </svg>
+                    )}
+                  </div>
+
+                  {/* ── CORE METRICS ── */}
                   <div className="sgrid">
                     <div className="scard full">
                       <div className="slbl">All-Time P&L</div>
                       <div className={`sval ${tPnl>=0?"g":"r"}`}>{fmt(tPnl)}</div>
                       <div className="ssub">{trades.length} trades · {wins.length}W {losses.length}L {bes.length}BE</div>
                     </div>
-                    <div className="scard">
-                      <div className="slbl">Win Rate</div>
-                      <div className={`sval ${wr>=70?"g":wr>=50?"y":"r"}`}>{wr}%</div>
-                      <div className="ssub">excl. BE</div>
-                    </div>
-                    <div className="scard">
-                      <div className="slbl">Avg Score</div>
-                      <div className={`sval ${avgScore>=75?"g":avgScore>=60?"y":"r"}`}>{avgScore}</div>
-                      <div className="ssub">setup quality</div>
-                    </div>
+                    <div className="scard"><div className="slbl">Win Rate</div><div className={`sval ${wr>=70?"g":wr>=50?"y":"r"}`}>{wr}%</div><div className="ssub">excl. BE</div></div>
+                    <div className="scard"><div className="slbl">Avg Score</div><div className={`sval ${avgScore>=75?"g":avgScore>=60?"y":"r"}`}>{avgScore}</div><div className="ssub">setup quality</div></div>
                   </div>
 
-                  {/* Row 2 — RR, PF, streak */}
-                  <div className="sgrid">
-                    <div className="scard">
-                      <div className="slbl">Avg R:R</div>
-                      <div className="sval b">{rr}</div>
-                      <div className="ssub">win / loss</div>
-                    </div>
-                    <div className="scard">
-                      <div className="slbl">Profit Factor</div>
-                      <div className={`sval ${parseFloat(pf)>=1.5?"g":parseFloat(pf)>=1?"y":"r"}`}>{pf}</div>
-                      <div className="ssub">gross W / gross L</div>
-                    </div>
-                    <div className="scard">
-                      <div className="slbl">Current Streak</div>
-                      <div className={`sval ${streakType==="W"?"g":streakType==="L"?"r":"b"}`}>{curStreak > 0 ? `${curStreak}${streakType}` : "—"}</div>
-                      <div className="ssub">in a row</div>
-                    </div>
-                    <div className="scard">
-                      <div className="slbl">Ann. Return</div>
-                      <div className={`sval ${annualized>=0?"g":"r"}`} style={{fontSize:22}}>{annualized >= 0 ? "+" : ""}{annualized >= 1000 || annualized <= -1000 ? `$${(annualized/1000).toFixed(1)}k` : `$${annualized}`}</div>
-                      <div className="ssub">proj / year</div>
-                    </div>
-                  </div>
-
-                  {/* Row 3 — avg win / loss */}
-                  <div className="sgrid">
-                    <div className="scard">
-                      <div className="slbl">Avg Win</div>
-                      <div className="sval g" style={{fontSize:22}}>{fmt(avgWin)}</div>
-                      <div className="ssub">{wins.length} wins</div>
-                    </div>
-                    <div className="scard">
-                      <div className="slbl">Avg Loss</div>
-                      <div className="sval r" style={{fontSize:22}}>-{fmt(avgLoss)}</div>
-                      <div className="ssub">{losses.length} losses</div>
-                    </div>
-                    <div className="scard">
-                      <div className="slbl">Best Trade</div>
-                      <div className="sval g" style={{fontSize:20}}>{fmt(best.pnl)}</div>
-                      <div className="ssub">{best.market} · {new Date(best.date).toLocaleDateString("en-US",{month:"short",day:"numeric"})}</div>
-                    </div>
-                    <div className="scard">
-                      <div className="slbl">Worst Trade</div>
-                      <div className="sval r" style={{fontSize:20}}>{fmt(worst.pnl)}</div>
-                      <div className="ssub">{worst.market} · {new Date(worst.date).toLocaleDateString("en-US",{month:"short",day:"numeric"})}</div>
-                    </div>
-                  </div>
-
-                  {/* Last 10 trades */}
+                  {/* ── RISK METRICS ── */}
                   <div className="stat-section">
-                    <div className="stat-section-hdr">
-                      <span>LAST 10 TRADES</span>
-                      <span style={{color:l10pnl>=0?"#22c55e":"#ef4444",fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:600}}>{fmt(l10pnl)}</span>
+                    <div className="stat-section-hdr"><span>RISK METRICS</span></div>
+                    <div className="sgrid" style={{marginBottom:0}}>
+                      <div className="scard"><div className="slbl">Sharpe Ratio</div><div className={`sval ${parseFloat(sharpe)>=1?"g":parseFloat(sharpe)>=0?"y":"r"}`} style={{fontSize:24}}>{sharpe}</div><div className="ssub">annualized</div></div>
+                      <div className="scard"><div className="slbl">Calmar Ratio</div><div className={`sval ${parseFloat(calmar)>=1?"g":parseFloat(calmar)>=0?"y":"r"}`} style={{fontSize:24}}>{calmar}</div><div className="ssub">ret / max DD</div></div>
+                      <div className="scard"><div className="slbl">Max Drawdown</div><div className="sval r" style={{fontSize:24}}>-{maxDD.toFixed(1)}%</div><div className="ssub">peak to trough</div></div>
+                      <div className="scard"><div className="slbl">Profit Factor</div><div className={`sval ${parseFloat(pf)>=1.5?"g":parseFloat(pf)>=1?"y":"r"}`} style={{fontSize:24}}>{pf}</div><div className="ssub">gross W / L</div></div>
+                      <div className="scard"><div className="slbl">Expectancy</div><div className={`sval ${parseFloat(expectancy)>=0?"g":"r"}`} style={{fontSize:22}}>{parseFloat(expectancy)>=0?"+":""}{fmt(parseFloat(expectancy))}</div><div className="ssub">per trade avg</div></div>
+                      <div className="scard"><div className="slbl">Kelly %</div><div className="sval b" style={{fontSize:22}}>{kellyCrit}{kellyCrit!=="—"?"%":""}</div><div className="ssub">optimal size</div></div>
+                      <div className="scard"><div className="slbl">Avg R:R</div><div className="sval b" style={{fontSize:24}}>{rr}</div><div className="ssub">win / loss</div></div>
+                      <div className="scard"><div className="slbl">Ann. Return</div><div className={`sval ${annualized>=0?"g":"r"}`} style={{fontSize:20}}>{annualized>=0?"+":""}{Math.abs(annualized)>=1000?"$"+(annualized/1000).toFixed(1)+"k":"$"+annualized}</div><div className="ssub">projected/yr</div></div>
                     </div>
-                    <div style={{display:"flex",gap:3,marginBottom:8}}>
-                      {last10.map((t,i) => (
-                        <div key={i} style={{flex:1,height:28,borderRadius:4,background:t.result==="W"?"#22c55e":t.result==="L"?"#ef4444":"#555",display:"flex",alignItems:"center",justifyContent:"center",fontSize:7,fontFamily:"'JetBrains Mono',monospace",color:"#000",fontWeight:700}}>
-                          {t.result}
-                        </div>
-                      ))}
-                      {Array.from({length: Math.max(0, 10-last10.length)}).map((_,i) => (
-                        <div key={"e"+i} style={{flex:1,height:28,borderRadius:4,background:"#111120"}} />
-                      ))}
-                    </div>
-                    <div className="ssub">{l10wr}% win rate · {l10w}W {last10.filter(t=>t.result==="L").length}L over last {last10.length}</div>
                   </div>
 
-                  {/* Long vs Short */}
+                  {/* ── STREAKS ── */}
+                  <div className="sgrid">
+                    <div className="scard"><div className="slbl">Current Streak</div><div className={`sval ${streakType==="W"?"g":streakType==="L"?"r":"b"}`}>{curStreak>0?curStreak+streakType:"—"}</div><div className="ssub">in a row</div></div>
+                    <div className="scard"><div className="slbl">Best W Streak</div><div className="sval g">{maxWStreak}</div><div className="ssub">consecutive wins</div></div>
+                    <div className="scard"><div className="slbl">Worst L Streak</div><div className="sval r">{maxLStreak}</div><div className="ssub">consecutive losses</div></div>
+                  </div>
+
+                  {/* ── AVG WIN / LOSS ── */}
+                  <div className="sgrid">
+                    <div className="scard"><div className="slbl">Avg Win</div><div className="sval g" style={{fontSize:20}}>{fmt(avgWin)}</div><div className="ssub">{wins.length} wins</div></div>
+                    <div className="scard"><div className="slbl">Avg Loss</div><div className="sval r" style={{fontSize:20}}>-{fmt(avgLoss)}</div><div className="ssub">{losses.length} losses</div></div>
+                    <div className="scard"><div className="slbl">Best Trade</div><div className="sval g" style={{fontSize:18}}>{fmt(best.pnl)}</div><div className="ssub">{best.market} · {new Date(best.date).toLocaleDateString("en-US",{month:"short",day:"numeric"})}</div></div>
+                    <div className="scard"><div className="slbl">Worst Trade</div><div className="sval r" style={{fontSize:18}}>{fmt(worst.pnl)}</div><div className="ssub">{worst.market} · {new Date(worst.date).toLocaleDateString("en-US",{month:"short",day:"numeric"})}</div></div>
+                  </div>
+
+                  {/* ── LAST 10 ── */}
+                  <div className="stat-section">
+                    <div className="stat-section-hdr"><span>LAST 10 TRADES</span><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:600,color:l10pnl>=0?"#22c55e":"#ef4444"}}>{fmt(l10pnl)}</span></div>
+                    <div style={{display:"flex",gap:3,marginBottom:8}}>
+                      {last10.map((t,i)=><div key={i} style={{flex:1,height:28,borderRadius:4,background:t.result==="W"?"#22c55e":t.result==="L"?"#ef4444":"#555",display:"flex",alignItems:"center",justifyContent:"center",fontSize:7,fontFamily:"'JetBrains Mono',monospace",color:"#000",fontWeight:700}}>{t.result}</div>)}
+                      {Array.from({length:Math.max(0,10-last10.length)}).map((_,i)=><div key={"e"+i} style={{flex:1,height:28,borderRadius:4,background:"#111120"}}/>)}
+                    </div>
+                    <div className="ssub">{l10wr}% WR · {l10w}W {l10l}L over last {last10.length}</div>
+                  </div>
+
+                  {/* ── CONFLUENCE WIN RATE ── */}
+                  <div className="stat-section">
+                    <div className="stat-section-hdr"><span>CONFLUENCE WIN RATE</span></div>
+                    {confStats.length===0 ? <div className="ssub" style={{padding:"8px 0"}}>Log trades with confluences to see data.</div> : (
+                      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                        {confStats.map(({c,count,wr:cwr,woWR,avgPnl})=>{
+                          const barW = cwr!=null ? cwr : 0;
+                          const delta = (cwr!=null&&woWR!=null) ? cwr-woWR : null;
+                          return (
+                            <div key={c.id}>
+                              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                                <span style={{fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"#ccd",fontWeight:600}}>{c.icon} {c.label}</span>
+                                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:"#778899"}}>{count}t · avg {avgPnl!=null?(parseFloat(avgPnl)>=0?"+":"")+fmt(Math.round(parseFloat(avgPnl))):"-"}</span>
+                              </div>
+                              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                <div style={{flex:1,height:18,background:"#0d0d18",borderRadius:4,overflow:"hidden",position:"relative"}}>
+                                  <div style={{position:"absolute",left:0,top:0,height:"100%",width:barW+"%",background:barW>=70?"rgba(34,197,94,.3)":barW>=50?"rgba(245,158,11,.25)":"rgba(239,68,68,.2)",borderRadius:4}}/>
+                                  <div style={{position:"absolute",left:6,top:0,height:"100%",display:"flex",alignItems:"center",fontFamily:"'JetBrains Mono',monospace",fontSize:9,fontWeight:600,color:barW>=70?"#22c55e":barW>=50?"#f59e0b":"#ef4444"}}>{cwr!=null?cwr+"%":"—"}</div>
+                                </div>
+                                {delta!=null&&<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:8,color:delta>=0?"#22c55e":"#ef4444",minWidth:28,textAlign:"right"}}>{delta>=0?"+":""}{delta}%</span>}
+                              </div>
+                              {delta!=null&&<div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:8,color:"#556",marginTop:1}}>vs {woWR!=null?woWR+"% without":""}</div>}
+                            </div>
+                          );
+                        })}
+                        <div style={{marginTop:4,padding:"8px 10px",background:"#06060c",borderRadius:8,fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:"#778899",lineHeight:1.6}}>
+                          Delta (%) = win rate WITH vs WITHOUT the confluence. Positive = confluence adds edge.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── PARTIAL TP ANALYSIS ── */}
+                  {(partialTrades.length>0||fullTPTrades.length>0) && (
+                    <div className="stat-section">
+                      <div className="stat-section-hdr"><span>TAKE PROFIT ANALYSIS</span></div>
+                      <div className="sgrid" style={{marginBottom:8}}>
+                        {fullTPTrades.length>0&&<div className="scard"><div className="slbl">Full TP</div><div className="sval g" style={{fontSize:22}}>{fullTPTrades.length}</div><div className="ssub">{avgFullPts!=null?avgFullPts+" avg pts":""}</div>{avgFullPnl&&<div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:"#22c55e",marginTop:3}}>avg {fmt(parseInt(avgFullPnl))}</div>}</div>}
+                        {partialTrades.length>0&&<div className="scard"><div className="slbl">Partial TP</div><div className="sval y" style={{fontSize:22}}>{partialTrades.length}</div><div className="ssub">{avgPartialPts!=null?avgPartialPts+" avg pts":""}</div>{avgPartialPnl&&<div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:"#f59e0b",marginTop:3}}>avg {fmt(parseInt(avgPartialPnl))}</div>}</div>}
+                      </div>
+                      {partialToFullRate!=null&&(
+                        <div style={{background:"#0a0a14",border:"1px solid #1a1a2e",borderRadius:10,padding:"12px 14px"}}>
+                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:"#778899",textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>Partial → Full TP Continuation Rate</div>
+                          <div style={{display:"flex",alignItems:"center",gap:10}}>
+                            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:36,letterSpacing:".04em",color:partialToFullRate>=60?"#22c55e":partialToFullRate>=40?"#f59e0b":"#ef4444"}}>{partialToFullRate}%</div>
+                            <div style={{flex:1}}>
+                              <div style={{height:8,background:"#111120",borderRadius:4,overflow:"hidden"}}>
+                                <div style={{height:"100%",width:partialToFullRate+"%",background:partialToFullRate>=60?"#22c55e":partialToFullRate>=40?"#f59e0b":"#ef4444",borderRadius:4}}/>
+                              </div>
+                              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:"#778899",marginTop:4}}>{partialToFull.length} of {partialTrades.length} partial TPs ran to full TP</div>
+                            </div>
+                          </div>
+                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:"#556",marginTop:8,lineHeight:1.5}}>
+                            {partialToFullRate>=60?"Strong runner — price frequently continues after partial.":partialToFullRate>=40?"Mixed — consider holding longer or reviewing confluence before partial.":"Price mostly stalls after partial. Partial TP may be optimal exit strategy."}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── LONG VS SHORT ── */}
                   <div className="stat-section">
                     <div className="stat-section-hdr"><span>LONG VS SHORT</span></div>
                     <div className="sgrid" style={{marginBottom:0}}>
@@ -980,27 +1136,20 @@ export default function TradeJournal() {
                     </div>
                   </div>
 
-                  {/* Weekly breakdown */}
+                  {/* ── WEEKLY BREAKDOWN ── */}
                   <div className="stat-section">
                     <div className="stat-section-hdr"><span>WEEKLY BREAKDOWN</span></div>
-                    {weeks.map(wk => {
-                      const wt = weekMap[wk];
-                      const wpnl = wt.reduce((s,t)=>s+t.pnl,0);
-                      const ww = wt.filter(t=>t.result==="W").length;
-                      const wl = wt.filter(t=>t.result==="L").length;
-                      const wwr = (ww+wl)>0 ? Math.round(ww/(ww+wl)*100) : 0;
-                      const [wy, wm, wd] = wk.split("-").map(Number);
-                      const monDate = new Date(wy, wm-1, wd);
-                      const friDate = new Date(wy, wm-1, wd + 4);
+                    {weeks.map(wk=>{
+                      const wt=weekMap[wk]; const wpnl=wt.reduce((s,t)=>s+t.pnl,0);
+                      const ww=wt.filter(t=>t.result==="W").length; const wl=wt.filter(t=>t.result==="L").length;
+                      const wwr=(ww+wl)>0?Math.round(ww/(ww+wl)*100):0;
+                      const [wy,wm,wd]=wk.split("-").map(Number);
+                      const monDate=new Date(wy,wm-1,wd); const friDate=new Date(wy,wm-1,wd+4);
                       return (
                         <div key={wk} className="week-row">
                           <div style={{flex:1}}>
-                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:"#778899"}}>
-                              {monDate.toLocaleDateString("en-US",{month:"short",day:"numeric"})} – {friDate.toLocaleDateString("en-US",{month:"short",day:"numeric"})}
-                            </div>
-                            <div style={{display:"flex",gap:2,marginTop:4}}>
-                              {wt.map((t,i) => <div key={i} style={{width:8,height:8,borderRadius:2,background:t.result==="W"?"#22c55e":t.result==="L"?"#ef4444":"#555"}} />)}
-                            </div>
+                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:"#778899"}}>{monDate.toLocaleDateString("en-US",{month:"short",day:"numeric"})} – {friDate.toLocaleDateString("en-US",{month:"short",day:"numeric"})}</div>
+                            <div style={{display:"flex",gap:2,marginTop:4}}>{wt.map((t,i)=><div key={i} style={{width:8,height:8,borderRadius:2,background:t.result==="W"?"#22c55e":t.result==="L"?"#ef4444":"#555"}}/>)}</div>
                           </div>
                           <div style={{textAlign:"right"}}>
                             <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:600,color:wpnl>=0?"#22c55e":"#ef4444"}}>{fmt(wpnl)}</div>
@@ -1011,50 +1160,41 @@ export default function TradeJournal() {
                     })}
                   </div>
 
-                  {/* Best day of week */}
+                  {/* ── P&L BY DOW ── */}
                   <div className="stat-section">
                     <div className="stat-section-hdr"><span>P&L BY DAY OF WEEK</span></div>
                     <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                      {[1,2,3,4,5].map(d => {
-                        const dTrades = dowMap[d];
-                        if (dTrades.length === 0) return null;
-                        const dPnl = dTrades.reduce((a,b)=>a+b,0);
-                        const dAvg = dPnl / dTrades.length;
-                        const maxAbs = Math.max(...[1,2,3,4,5].map(x => Math.abs(dowMap[x].reduce((a,b)=>a+b,0))), 1);
-                        const barW = Math.round(Math.abs(dPnl) / maxAbs * 100);
+                      {[1,2,3,4,5].map(d=>{
+                        const dTrades=dowMap[d]; if(dTrades.length===0) return null;
+                        const dPnl=dTrades.reduce((a,b)=>a+b,0);
+                        const maxAbs=Math.max(...[1,2,3,4,5].map(x=>Math.abs(dowMap[x].reduce((a,b)=>a+b,0))),1);
+                        const barW=Math.round(Math.abs(dPnl)/maxAbs*100);
                         return (
                           <div key={d} style={{display:"flex",alignItems:"center",gap:8}}>
                             <div style={{width:28,fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:"#778899",textTransform:"uppercase"}}>{dowLabels[d]}</div>
                             <div style={{flex:1,height:20,background:"#0d0d18",borderRadius:4,overflow:"hidden",position:"relative"}}>
-                              <div style={{position:"absolute",left:0,top:0,height:"100%",width:`${barW}%`,background:dPnl>=0?"rgba(34,197,94,.3)":"rgba(239,68,68,.25)",borderRadius:4}}/>
-                              <div style={{position:"absolute",left:8,top:0,height:"100%",display:"flex",alignItems:"center",fontFamily:"'JetBrains Mono',monospace",fontSize:9,fontWeight:600,color:dPnl>=0?"#22c55e":"#ef4444"}}>
-                                {fmt(dPnl)}
-                              </div>
+                              <div style={{position:"absolute",left:0,top:0,height:"100%",width:barW+"%",background:dPnl>=0?"rgba(34,197,94,.3)":"rgba(239,68,68,.25)",borderRadius:4}}/>
+                              <div style={{position:"absolute",left:8,top:0,height:"100%",display:"flex",alignItems:"center",fontFamily:"'JetBrains Mono',monospace",fontSize:9,fontWeight:600,color:dPnl>=0?"#22c55e":"#ef4444"}}>{fmt(dPnl)}</div>
                             </div>
                             <div style={{width:40,fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:"#778899",textAlign:"right"}}>{dTrades.length}t</div>
                           </div>
                         );
                       })}
                     </div>
-                    {bestDow && (
-                      <div style={{marginTop:8,fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:"#f59e0b"}}>
-                        Best day: {dowLabels[bestDow.day]} (avg {fmt(Math.round(bestDow.avg))}/trade)
-                      </div>
-                    )}
+                    {bestDow&&<div style={{marginTop:8,fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:"#f59e0b"}}>Best day: {dowLabels[bestDow.day]} (avg {fmt(Math.round(bestDow.avg))}/trade)</div>}
                   </div>
 
-                  {/* Setup grade distribution */}
+                  {/* ── GRADE DIST ── */}
                   <div className="stat-section">
                     <div className="stat-section-hdr"><span>SETUP GRADE DIST.</span></div>
                     <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                      {["Aplus","A","Bplus","B","C"].map(g => {
-                        const count = gradeDist[g];
-                        const pct = trades.length > 0 ? Math.round(count/trades.length*100) : 0;
+                      {["Aplus","A","Bplus","B","C"].map(g=>{
+                        const count=gradeDist[g]; const pct=trades.length>0?Math.round(count/trades.length*100):0;
                         return (
                           <div key={g} style={{display:"flex",alignItems:"center",gap:8}}>
                             <div style={{width:22,fontFamily:"'Bebas Neue',sans-serif",fontSize:14,color:gradeColors[g]}}>{gradeLabels[g]}</div>
                             <div style={{flex:1,height:20,background:"#0d0d18",borderRadius:4,overflow:"hidden",position:"relative"}}>
-                              <div style={{position:"absolute",left:0,top:0,height:"100%",width:`${pct}%`,background:gradeColors[g]+"33",borderRadius:4,transition:"width .4s"}}/>
+                              <div style={{position:"absolute",left:0,top:0,height:"100%",width:pct+"%",background:gradeColors[g]+"33",borderRadius:4}}/>
                               <div style={{position:"absolute",left:8,top:0,height:"100%",display:"flex",alignItems:"center",fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:gradeColors[g]}}>{count} trades</div>
                             </div>
                             <div style={{width:30,fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:"#778899",textAlign:"right"}}>{pct}%</div>
@@ -1064,18 +1204,16 @@ export default function TradeJournal() {
                     </div>
                   </div>
 
-                  {/* Market breakdown */}
+                  {/* ── BY MARKET ── */}
                   <div className="stat-section">
                     <div className="stat-section-hdr"><span>BY MARKET</span></div>
                     <div className="sgrid" style={{marginBottom:0}}>
-                      {[{id:"NQ",label:"NAS100",color:"#00d4ff"},{id:"XAU",label:"XAUUSD",color:"#f5c842"}].map(({id,label,color}) => {
-                        const mt = trades.filter(t => t.market === id);
-                        if (mt.length === 0) return null;
-                        const mW = mt.filter(t=>t.result==="W").length;
-                        const mL = mt.filter(t=>t.result==="L").length;
-                        const mBE = mt.filter(t=>t.result==="BE").length;
-                        const mWR = (mW+mL)>0 ? Math.round(mW/(mW+mL)*100) : 0;
-                        const mPnl = mt.reduce((s,t)=>s+t.pnl,0);
+                      {[{id:"NQ",label:"NAS100",color:"#00d4ff"},{id:"XAU",label:"XAUUSD",color:"#f5c842"}].map(({id,label,color})=>{
+                        const mt=trades.filter(t=>t.market===id); if(mt.length===0) return null;
+                        const mW=mt.filter(t=>t.result==="W").length; const mL=mt.filter(t=>t.result==="L").length;
+                        const mBE=mt.filter(t=>t.result==="BE").length;
+                        const mWR=(mW+mL)>0?Math.round(mW/(mW+mL)*100):0;
+                        const mPnl=mt.reduce((s,t)=>s+t.pnl,0);
                         return (
                           <div key={id} className="scard">
                             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
@@ -1091,38 +1229,34 @@ export default function TradeJournal() {
                     </div>
                   </div>
 
-                  {/* Monthly breakdown */}
+                  {/* ── BY MONTH ── */}
                   <div className="stat-section">
                     <div className="stat-section-hdr"><span>BY MONTH</span></div>
                     <div className="month-scroll">
                       {months.map(m=>{
-                        const mt = trades.filter(t=>getMonthKey(t.date)===m);
-                        const mp = mt.reduce((s,t)=>s+t.pnl,0);
-                        return (
-                          <button key={m} className="mchip" style={{color:mp>=0?"#22c55e":"#ef4444",borderColor:mp>=0?"rgba(34,197,94,.2)":"rgba(239,68,68,.15)"}} onClick={()=>{setCalMonth(m);setView("calendar")}}>
-                            {getMonthLabel(m).split(" ")[0]} {fmt(mp)}
-                          </button>
-                        );
+                        const mt=trades.filter(t=>getMonthKey(t.date)===m); const mp=mt.reduce((s,t)=>s+t.pnl,0);
+                        return <button key={m} className="mchip" style={{color:mp>=0?"#22c55e":"#ef4444",borderColor:mp>=0?"rgba(34,197,94,.2)":"rgba(239,68,68,.15)"}} onClick={()=>{setCalMonth(m);setView("calendar")}}>{getMonthLabel(m).split(" ")[0]} {fmt(mp)}</button>;
                       })}
                     </div>
                   </div>
 
-                  {/* Recent trades list */}
+                  {/* ── RECENT TRADES ── */}
                   <div className="stat-section">
                     <div className="stat-section-hdr"><span>RECENT TRADES</span></div>
                     <div className="hist-list">
                       {trades.slice(0,20).map(t=>(
                         <div key={t.id} className="htrade" style={{flexDirection:"column",alignItems:"stretch",gap:6}}>
                           <div style={{display:"flex",alignItems:"center",gap:10}}>
-                            <div className={`hdot ${t.result}`}/>
+                            <div className={"hdot "+t.result}/>
                             <div className="hinfo">
                               <div className="htop">
                                 <span className="hmkt" style={{color:MARKET_COLOR[t.market]||"#888"}}>{t.market}</span>
-                                <span className={`hdir ${t.direction}`}>{t.direction}</span>
+                                <span className={"hdir "+t.direction}>{t.direction}</span>
                                 <span className="hgrade">{t.gradeLabel}</span>
-                                {t.beOutcome && <span className={`be-outcome-tag ${t.beOutcome}`}>{t.beOutcome==="tp"?"→TP":t.beOutcome==="sl"?"→SL":"Con."}</span>}
+                                {t.tpType==="partial"&&<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:8,color:"#f59e0b",background:"rgba(245,158,11,.1)",borderRadius:3,padding:"1px 5px"}}>partial</span>}
+                                {t.beOutcome&&<span className={"be-outcome-tag "+t.beOutcome}>{t.beOutcome==="tp"?"→TP":t.beOutcome==="sl"?"→SL":"Con."}</span>}
                               </div>
-                              <div className="hmeta">{t.units} units · {new Date(t.date).toLocaleDateString("en-US",{month:"short",day:"numeric"})}</div>
+                              <div className="hmeta">{t.units} units · {new Date(t.date).toLocaleDateString("en-US",{month:"short",day:"numeric"})}{t.pointsGained?" · "+t.pointsGained.toFixed(1)+"pts":""}</div>
                             </div>
                             <div style={{marginLeft:"auto",textAlign:"right"}}>
                               <div className="hpnl" style={{color:pnlColor(t.pnl)}}>{fmt(t.pnl)}</div>
@@ -1226,7 +1360,8 @@ export default function TradeJournal() {
             </div>
           </div>
         )}
-      </div>
+      </div> 
     </>
   );
 }
+ 
